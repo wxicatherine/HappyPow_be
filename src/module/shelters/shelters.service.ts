@@ -1,50 +1,76 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../service/supabase.service';
-
-import { Shelters } from 'src/common/interfaces/user.interface';
+import { Shelters } from 'src/common/interfaces/user.interface'; // Приклад
 
 @Injectable()
 export class SheltersService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
-  // Get all shelters
-  async findAll() {
+  async findAll(): Promise<Shelters[]> {
     const { data, error } = await this.supabaseService.getClient()
-      .from('shelter')
+      .from('shelters')
       .select('*');
-    if (error) throw new InternalServerErrorException('Error fetching shelters: ' + error.message);
-    return data;
+
+    if (error) {
+      console.error('Error fetching shelters:', error.message);
+      throw new InternalServerErrorException('Cannot fetch shelters');
+    }
+    return (data as Shelters[]) || [];
   }
 
-  // Get shelter by ID
-  async findOne(id: string) {
+  async findOne(shelter_id: string): Promise<Shelters> {
     const { data, error } = await this.supabaseService.getClient()
-      .from('shelter')
+      .from('shelters')
       .select('*')
-      .eq('shelter_id', id)
+      .eq('shelter_id', shelter_id)
       .single();
-    if (error) throw new NotFoundException(`Shelter with ID ${id} not found: ` + error.message);
-    return data;
+
+    if (error || !data) {
+      console.error(`Error fetching shelter with ID ${shelter_id}:`, error?.message);
+      throw new NotFoundException(`Shelter with ID ${shelter_id} not found`);
+    }
+    return data as Shelters;
   }
 
-  // Create a new shelter
-  async create(data: Shelters) {
-    const { data: newEntry, error } = await this.supabaseService.getClient()
-      .from('shelter')
-      .insert([data])
+  async create(dto: Omit<Shelters, 'shelter_id'>): Promise<Shelters> {
+    const { data, error } = await this.supabaseService.getClient()
+      .from('shelters')
+      .insert([dto])
       .select()
       .single();
-    if (error) throw new InternalServerErrorException('Error creating shelter: ' + error.message);
-    return newEntry;
+
+    if (error) {
+      console.error('Error creating shelter:', error.message);
+      throw new InternalServerErrorException('Failed to create shelter');
+    }
+    return data as Shelters;
   }
 
-  // Remove a shelter
-  async remove(id: string): Promise<{ message: string }> {
+  async update(shelter_id: string, dto: Partial<Shelters>): Promise<Shelters> {
+    const { data, error } = await this.supabaseService.getClient()
+      .from('shelters')
+      .update(dto)
+      .eq('shelter_id', shelter_id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Error updating shelter with ID ${shelter_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to update shelter with ID ${shelter_id}`);
+    }
+    return data as Shelters;
+  }
+
+  async remove(shelter_id: string): Promise<{ message: string }> {
     const { error } = await this.supabaseService.getClient()
-      .from('shelter')
+      .from('shelters')
       .delete()
-      .eq('shelter_id', id);
-    if (error) throw new InternalServerErrorException('Error deleting shelter: ' + error.message);
-    return { message: 'Deleted successfully' };
+      .eq('shelter_id', shelter_id);
+
+    if (error) {
+      console.error(`Error deleting shelter with ID ${shelter_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to delete shelter with ID ${shelter_id}`);
+    }
+    return { message: `Shelter with ID ${shelter_id} deleted successfully` };
   }
 }

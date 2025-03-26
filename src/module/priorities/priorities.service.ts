@@ -1,49 +1,76 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../service/supabase.service';
-import { Priorities } from 'src/common/interfaces/user.interface';
+import { Priorities } from 'src/common/interfaces/user.interface'; // Приклад
 
 @Injectable()
 export class PrioritiesService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
-  // Отримати всі пріоритети
-  async findAll() {
+  async findAll(): Promise<Priorities[]> {
     const { data, error } = await this.supabaseService.getClient()
       .from('priorities')
       .select('*');
-    if (error) throw new InternalServerErrorException('Error fetching priorities: ' + error.message);
-    return data;
+
+    if (error) {
+      console.error('Error fetching priorities:', error.message);
+      throw new InternalServerErrorException('Cannot fetch priorities');
+    }
+    return (data as Priorities[]) || [];
   }
 
-  // Отримати пріоритет за ID
-  async findOne(id: string) {
+  async findOne(priority_id: string): Promise<Priorities> {
     const { data, error } = await this.supabaseService.getClient()
       .from('priorities')
       .select('*')
-      .eq('prioritie_id', id)
+      .eq('priority_id', priority_id)
       .single();
-    if (error) throw new NotFoundException(`Priority with ID ${id} not found: ` + error.message);
-    return data;
+
+    if (error || !data) {
+      console.error(`Error fetching priority with ID ${priority_id}:`, error?.message);
+      throw new NotFoundException(`Priority with ID ${priority_id} not found`);
+    }
+    return data as Priorities;
   }
 
-  // Створити новий пріоритет
-  async create(data: Priorities) {
-    const { data: newEntry, error } = await this.supabaseService.getClient()
+  async create(dto: Omit<Priorities, 'priority_id'>): Promise<Priorities> {
+    const { data, error } = await this.supabaseService.getClient()
       .from('priorities')
-      .insert([data])
+      .insert([dto])
       .select()
       .single();
-    if (error) throw new InternalServerErrorException('Error creating priority: ' + error.message);
-    return newEntry;
+
+    if (error) {
+      console.error('Error creating priority:', error.message);
+      throw new InternalServerErrorException('Failed to create priority');
+    }
+    return data as Priorities;
   }
 
-  // Видалити пріоритет
-  async remove(id: string) {
+  async update(priority_id: string, dto: Partial<Priorities>): Promise<Priorities> {
+    const { data, error } = await this.supabaseService.getClient()
+      .from('priorities')
+      .update(dto)
+      .eq('priority_id', priority_id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Error updating priority with ID ${priority_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to update priority with ID ${priority_id}`);
+    }
+    return data as Priorities;
+  }
+
+  async remove(priority_id: string): Promise<{ message: string }> {
     const { error } = await this.supabaseService.getClient()
       .from('priorities')
       .delete()
-      .eq('prioritie_id', id);
-    if (error) throw new InternalServerErrorException('Error deleting priority: ' + error.message);
-    return { message: 'Deleted successfully' };
+      .eq('priority_id', priority_id);
+
+    if (error) {
+      console.error(`Error deleting priority with ID ${priority_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to delete priority with ID ${priority_id}`);
+    }
+    return { message: `Priority with ID ${priority_id} deleted successfully` };
   }
 }

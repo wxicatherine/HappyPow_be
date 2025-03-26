@@ -1,49 +1,76 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../service/supabase.service';
-import { Species } from 'src/common/interfaces/user.interface';
+import { Species } from 'src/common/interfaces/user.interface'; // Приклад
 
 @Injectable()
 export class SpeciesService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
-  // Get all species
-  async findAll() {
+  async findAll(): Promise<Species[]> {
     const { data, error } = await this.supabaseService.getClient()
       .from('species')
       .select('*');
-    if (error) throw new InternalServerErrorException('Error fetching species: ' + error.message);
-    return data;
+
+    if (error) {
+      console.error('Error fetching species:', error.message);
+      throw new InternalServerErrorException('Cannot fetch species');
+    }
+    return (data as Species[]) || [];
   }
 
-  // Get species by ID
-  async findOne(id: string) {
+  async findOne(species_id: string): Promise<Species> {
     const { data, error } = await this.supabaseService.getClient()
       .from('species')
       .select('*')
-      .eq('specie_id', id)
+      .eq('species_id', species_id)
       .single();
-    if (error) throw new NotFoundException(`Species with ID ${id} not found: ` + error.message);
-    return data;
+
+    if (error || !data) {
+      console.error(`Error fetching species with ID ${species_id}:`, error?.message);
+      throw new NotFoundException(`Species with ID ${species_id} not found`);
+    }
+    return data as Species;
   }
 
-  // Create a new species
-  async create(data: Species) {
-    const { data: newEntry, error } = await this.supabaseService.getClient()
+  async create(dto: Omit<Species, 'species_id'>): Promise<Species> {
+    const { data, error } = await this.supabaseService.getClient()
       .from('species')
-      .insert([data])
+      .insert([dto])
       .select()
       .single();
-    if (error) throw new InternalServerErrorException('Error creating species: ' + error.message);
-    return newEntry;
+
+    if (error) {
+      console.error('Error creating species:', error.message);
+      throw new InternalServerErrorException('Failed to create species');
+    }
+    return data as Species;
   }
 
-  // Remove a species
-  async remove(id: string): Promise<{ message: string }> {
+  async update(species_id: string, dto: Partial<Species>): Promise<Species> {
+    const { data, error } = await this.supabaseService.getClient()
+      .from('species')
+      .update(dto)
+      .eq('species_id', species_id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Error updating species with ID ${species_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to update species with ID ${species_id}`);
+    }
+    return data as Species;
+  }
+
+  async remove(species_id: string): Promise<{ message: string }> {
     const { error } = await this.supabaseService.getClient()
       .from('species')
       .delete()
-      .eq('specie_id', id);
-    if (error) throw new InternalServerErrorException('Error deleting species: ' + error.message);
-    return { message: 'Deleted successfully' };
+      .eq('species_id', species_id);
+
+    if (error) {
+      console.error(`Error deleting species with ID ${species_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to delete species with ID ${species_id}`);
+    }
+    return { message: `Species with ID ${species_id} deleted successfully` };
   }
 }

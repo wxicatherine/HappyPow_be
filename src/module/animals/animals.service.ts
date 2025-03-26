@@ -2,13 +2,12 @@ import { Injectable, NotFoundException, InternalServerErrorException } from '@ne
 import { SupabaseService } from '../../service/supabase.service';
 import { Animals } from 'src/common/interfaces/user.interface';
 
-
 @Injectable()
 export class AnimalsService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
   // Отримати всіх тварин
-  async findAll() {
+  async findAll(): Promise<Animals[]> {
     const { data, error } = await this.supabaseService.getClient()
       .from('animals')
       .select(`
@@ -16,52 +15,60 @@ export class AnimalsService {
         shelters (name, location),
         species (name)
       `);
-  
-    if (error) throw new InternalServerErrorException('Failed to fetch animals: ' + error.message);
-    return data;
+
+    if (error) {
+      console.error('Error fetching animals:', error.message);
+      throw new InternalServerErrorException('Failed to fetch animals: ' + error.message);
+    }
+    return data as Animals[];
   }
 
-  // Отримати тварину по ID разом із притулком (shelter)
-  async findOne(id: string) {
+  // Отримати тварину по ID разом із даними притулку
+  async findOne(id: string): Promise<Animals> {
     const { data, error } = await this.supabaseService.getClient()
       .from('animals')
       .select(`
         *,
         shelters (name, location)
-      `) // Додаємо зв’язок із shelters
+      `)
       .eq('animal_id', id)
       .single();
 
-    if (error) throw new NotFoundException(`Animal with ID ${id} not found: ` + error.message);
-    return data;
+    if (error || !data) {
+      console.error(`Error fetching animal with ID ${id}:`, error?.message);
+      throw new NotFoundException(`Animal with ID ${id} not found: ` + error?.message);
+    }
+    return data as Animals;
   }
 
   // Додати нову тварину
-  async create(animalDto: Animals) {
-    // Переконуємося, що shelter_id існує
-    const { data: shelter, error: shelterError } = await this.supabaseService.getClient()
+  async create(animalDto: Animals): Promise<Animals> {
+    // Перевірка, чи існує притулок
+    const { data: shelterData, error: shelterError } = await this.supabaseService.getClient()
       .from('shelters')
       .select('shelter_id')
       .eq('shelter_id', animalDto.shelter_id)
       .single();
-  
-    if (!shelter || shelterError) {
+
+    if (shelterError || !shelterData) {
       throw new NotFoundException('Притулок не знайдено');
     }
-  
-    // Додаємо тварину
+
     const { data, error } = await this.supabaseService.getClient()
       .from('animals')
       .insert([animalDto])
       .select()
       .single();
-  
-    if (error) throw new InternalServerErrorException('Failed to create animal: ' + error.message);
-    return data;
+
+    if (error) {
+      console.error('Error creating animal:', error.message);
+      throw new InternalServerErrorException('Failed to create animal: ' + error.message);
+    }
+    return data as Animals;
   }
 
-  // Оновити тварину
-  async update(id: string, animalDto: Partial<Animals>) {
+  // Оновити дані тварини
+  async update(id: string, animalDto: Partial<Animals>): Promise<Animals> {
     const { data, error } = await this.supabaseService.getClient()
       .from('animals')
       .update(animalDto)
@@ -69,27 +76,37 @@ export class AnimalsService {
       .select()
       .single();
 
-    if (error) throw new InternalServerErrorException('Failed to update animal: ' + error.message);
-    return data;
+    if (error) {
+      console.error(`Error updating animal with ID ${id}:`, error.message);
+      throw new InternalServerErrorException('Failed to update animal: ' + error.message);
+    }
+    return data as Animals;
   }
 
-  // Видалити тварину
-  async delete(id: string) {
-    // Видаляємо всі adoption_requests, де є ця тварина
+  // Видалити тварину та пов'язані записи
+  async delete(id: string): Promise<{ message: string }> {
+    // Видаляємо пов'язані adoption_requests
     const { error: adoptionError } = await this.supabaseService.getClient()
       .from('adoption_requests')
       .delete()
       .eq('animal_id', id);
-  
-    if (adoptionError) throw new InternalServerErrorException('Failed to delete adoption requests: ' + adoptionError.message);
+
+    if (adoptionError) {
+      console.error(`Error deleting adoption requests for animal ID ${id}:`, adoptionError.message);
+      throw new InternalServerErrorException('Failed to delete adoption requests: ' + adoptionError.message);
+    }
 
     // Видаляємо саму тварину
     const { error } = await this.supabaseService.getClient()
       .from('animals')
       .delete()
       .eq('animal_id', id);
-  
-    if (error) throw new InternalServerErrorException('Failed to delete animal: ' + error.message);
+
+    if (error) {
+      console.error(`Error deleting animal with ID ${id}:`, error.message);
+      throw new InternalServerErrorException('Failed to delete animal: ' + error.message);
+    }
+
     return { message: 'Тварину та пов’язані записи видалено' };
   }
 }

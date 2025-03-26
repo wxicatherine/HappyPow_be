@@ -1,48 +1,82 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../service/supabase.service';
 import { Reviews } from 'src/common/interfaces/user.interface';
+
 @Injectable()
 export class ReviewsService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
-  // Отримати всі відгуки
-  async findAll() {
+  async findAll(): Promise<Reviews[]> {
     const { data, error } = await this.supabaseService.getClient()
       .from('reviews')
       .select('*');
-    if (error) throw new InternalServerErrorException('Error fetching reviews: ' + error.message);
-    return data;
+
+    if (error) {
+      console.error('Error fetching reviews:', error.message);
+      throw new InternalServerErrorException('Cannot fetch reviews');
+    }
+    return (data as Reviews[]) || [];
   }
 
-  // Отримати відгук за ID
-  async findOne(id: string) {
+  async findOne(review_id: string): Promise<Reviews> {
     const { data, error } = await this.supabaseService.getClient()
       .from('reviews')
       .select('*')
-      .eq('review_id', id)
+      .eq('review_id', review_id)
       .single();
-    if (error) throw new NotFoundException(`Review with ID ${id} not found: ` + error.message);
-    return data;
+
+    if (error || !data) {
+      console.error(`Error fetching review with ID ${review_id}:`, error?.message);
+      throw new NotFoundException(`Review with ID ${review_id} not found`);
+    }
+    return data as Reviews;
   }
 
-  // Створити новий відгук
-  async create(data: Reviews) {
-    const { data: newEntry, error } = await this.supabaseService.getClient()
+  async create(dto: Omit<Reviews, 'review_id' | 'created_at'>): Promise<Reviews> {
+    // Автоматичне додавання дати створення
+    const { data, error } = await this.supabaseService.getClient()
       .from('reviews')
-      .insert([data])
+      .insert([
+        {
+          ...dto,
+          created_at: new Date().toISOString(),
+        },
+      ])
       .select()
       .single();
-    if (error) throw new InternalServerErrorException('Error creating review: ' + error.message);
-    return newEntry;
+
+    if (error) {
+      console.error('Error creating review:', error.message);
+      throw new InternalServerErrorException('Failed to create review');
+    }
+    return data as Reviews;
   }
 
-  // Видалити відгук
-  async remove(id: string) {
+  async update(review_id: string, dto: Partial<Reviews>): Promise<Reviews> {
+    const { data, error } = await this.supabaseService.getClient()
+      .from('reviews')
+      .update(dto)
+      .eq('review_id', review_id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Error updating review with ID ${review_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to update review with ID ${review_id}`);
+    }
+    return data as Reviews;
+  }
+
+  async remove(review_id: string): Promise<{ message: string }> {
     const { error } = await this.supabaseService.getClient()
       .from('reviews')
       .delete()
-      .eq('review_id', id);
-    if (error) throw new InternalServerErrorException('Error deleting review: ' + error.message);
-    return { message: 'Deleted successfully' };
+      .eq('review_id', review_id);
+
+    if (error) {
+      console.error(`Error deleting review with ID ${review_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to delete review with ID ${review_id}`);
+    }
+    return { message: `Review with ID ${review_id} deleted successfully` };
   }
 }

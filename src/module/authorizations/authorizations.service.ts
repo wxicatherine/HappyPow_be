@@ -1,48 +1,77 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../service/supabase.service';
-import { Authorizations } from'src/common/interfaces/user.interface';
+import { Authorizations } from 'src/common/interfaces/user.interface'; // Приклад
+
 @Injectable()
 export class AuthorizationsService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
-  // Отримати всі записи авторизації
-  async findAll() {
+  async findAll(): Promise<Authorizations[]> {
     const { data, error } = await this.supabaseService.getClient()
-      .from('authorization')
+      .from('authorizations')
       .select('*');
-    if (error) throw new InternalServerErrorException('Error fetching authorizations: ' + error.message);
-    return data;
+
+    if (error) {
+      console.error('Error fetching authorizations:', error.message);
+      throw new InternalServerErrorException('Cannot fetch authorizations');
+    }
+    return (data as Authorizations[]) || [];
   }
 
-  // Отримати запис авторизації по ID
-  async findOne(id: string) {
+  async findOne(auth_id: string): Promise<Authorizations> {
     const { data, error } = await this.supabaseService.getClient()
-      .from('authorization')
+      .from('authorizations')
       .select('*')
-      .eq('authorization_id', id)
+      .eq('auth_id', auth_id)
       .single();
-    if (error) throw new NotFoundException(`Authorization with ID ${id} not found: ` + error.message);
-    return data;
+
+    if (error || !data) {
+      console.error(`Error fetching authorization with ID ${auth_id}:`, error?.message);
+      throw new NotFoundException(`Authorization with ID ${auth_id} not found`);
+    }
+    return data as Authorizations;
   }
 
-  // Створити новий запис авторизації
-  async create(data: Authorizations) {
-    const { data: newEntry, error } = await this.supabaseService.getClient()
-      .from('authorization')
-      .insert([data])
+  async create(dto: Omit<Authorizations, 'auth_id'>): Promise<Authorizations> {
+    // Додайте валідацію, якщо потрібно
+    const { data, error } = await this.supabaseService.getClient()
+      .from('authorizations')
+      .insert([dto])
       .select()
       .single();
-    if (error) throw new InternalServerErrorException('Error creating authorization: ' + error.message);
-    return newEntry;
+
+    if (error) {
+      console.error('Error creating authorization:', error.message);
+      throw new InternalServerErrorException('Failed to create authorization');
+    }
+    return data as Authorizations;
   }
 
-  // Видалити запис авторизації по ID
-  async remove(id: string) {
+  async update(auth_id: string, dto: Partial<Authorizations>): Promise<Authorizations> {
+    const { data, error } = await this.supabaseService.getClient()
+      .from('authorizations')
+      .update(dto)
+      .eq('auth_id', auth_id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Error updating authorization with ID ${auth_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to update authorization with ID ${auth_id}`);
+    }
+    return data as Authorizations;
+  }
+
+  async remove(auth_id: string): Promise<{ message: string }> {
     const { error } = await this.supabaseService.getClient()
-      .from('authorization')
+      .from('authorizations')
       .delete()
-      .eq('authorization_id', id);
-    if (error) throw new InternalServerErrorException('Error deleting authorization: ' + error.message);
-    return { message: 'Deleted successfully' };
+      .eq('auth_id', auth_id);
+
+    if (error) {
+      console.error(`Error deleting authorization with ID ${auth_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to delete authorization with ID ${auth_id}`);
+    }
+    return { message: `Authorization with ID ${auth_id} deleted successfully` };
   }
 }

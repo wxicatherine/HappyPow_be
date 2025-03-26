@@ -1,50 +1,77 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../service/supabase.service';
-
-import { Volunteer } from 'src/common/interfaces/user.interface';  // Assuming this interface exists
+import { Volunteer } from 'src/common/interfaces/user.interface'; // Приклад
 
 @Injectable()
 export class VolunteerService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
-  // Get all volunteers
-  async findAll() {
+  async findAll(): Promise<Volunteer[]> {
     const { data, error } = await this.supabaseService.getClient()
       .from('volunteer')
       .select('*');
-    if (error) throw new InternalServerErrorException('Error fetching volunteers: ' + error.message);
-    return data;
+
+    if (error) {
+      console.error('Error fetching volunteers:', error.message);
+      throw new InternalServerErrorException('Cannot fetch volunteers');
+    }
+    return (data as Volunteer[]) || [];
   }
 
-  // Get a single volunteer by ID
-  async findOne(id: string) {
+  async findOne(volunteer_id: string): Promise<Volunteer> {
     const { data, error } = await this.supabaseService.getClient()
       .from('volunteer')
       .select('*')
-      .eq('volunteer_id', id)
+      .eq('volunteer_id', volunteer_id)
       .single();
-    if (error) throw new NotFoundException(`Volunteer with ID ${id} not found: ` + error.message);
-    return data;
+
+    if (error || !data) {
+      console.error(`Error fetching volunteer with ID ${volunteer_id}:`, error?.message);
+      throw new NotFoundException(`Volunteer with ID ${volunteer_id} not found`);
+    }
+    return data as Volunteer;
   }
 
-  // Create a new volunteer
-  async create(data: Volunteer) {
-    const { data: newEntry, error } = await this.supabaseService.getClient()
+  async create(dto: Omit<Volunteer, 'volunteer_id'>): Promise<Volunteer> {
+    // Додайте валідацію, якщо потрібно
+    const { data, error } = await this.supabaseService.getClient()
       .from('volunteer')
-      .insert([data])
+      .insert([dto])
       .select()
       .single();
-    if (error) throw new InternalServerErrorException('Error creating volunteer: ' + error.message);
-    return newEntry;
+
+    if (error) {
+      console.error('Error creating volunteer:', error.message);
+      throw new InternalServerErrorException('Failed to create volunteer');
+    }
+    return data as Volunteer;
   }
 
-  // Remove a volunteer by ID
-  async remove(id: string): Promise<{ message: string }> {
+  async update(volunteer_id: string, dto: Partial<Volunteer>): Promise<Volunteer> {
+    const { data, error } = await this.supabaseService.getClient()
+      .from('volunteer')
+      .update(dto)
+      .eq('volunteer_id', volunteer_id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Error updating volunteer with ID ${volunteer_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to update volunteer with ID ${volunteer_id}`);
+    }
+    return data as Volunteer;
+  }
+
+  async remove(volunteer_id: string): Promise<{ message: string }> {
     const { error } = await this.supabaseService.getClient()
       .from('volunteer')
       .delete()
-      .eq('volunteer_id', id);
-    if (error) throw new InternalServerErrorException('Error deleting volunteer: ' + error.message);
-    return { message: 'Deleted successfully' };
+      .eq('volunteer_id', volunteer_id);
+
+    if (error) {
+      console.error(`Error deleting volunteer with ID ${volunteer_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to delete volunteer with ID ${volunteer_id}`);
+    }
+    return { message: `Volunteer with ID ${volunteer_id} deleted successfully` };
   }
 }

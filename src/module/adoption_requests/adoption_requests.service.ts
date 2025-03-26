@@ -15,7 +15,7 @@ export class AdoptionRequestsService {
       console.error('Error fetching adoption requests:', error.message);
       throw new InternalServerErrorException('Cannot fetch adoption requests');
     }
-    return data || [];
+    return (data as AdoptionRequests[]) || [];
   }
 
   async findOne(id: string): Promise<AdoptionRequests> {
@@ -29,7 +29,7 @@ export class AdoptionRequestsService {
       console.error(`Error fetching adoption request with ID ${id}:`, error?.message);
       throw new NotFoundException(`Adoption request with ID ${id} not found`);
     }
-    return data;
+    return data as AdoptionRequests;
   }
 
   async create(data: Omit<AdoptionRequests, 'adoption_id' | 'request_date'>): Promise<AdoptionRequests> {
@@ -37,12 +37,27 @@ export class AdoptionRequestsService {
       throw new InternalServerErrorException('Missing required fields');
     }
 
+    // Додаткова перевірка: чи існує тварина та чи не усиновлена вона вже
+    const { data: animalData, error: animalError } = await this.supabaseService.getClient()
+      .from('animals')
+      .select('animal_id, is_adopted')
+      .eq('animal_id', data.animal_id)
+      .single();
+
+    if (animalError || !animalData) {
+      throw new NotFoundException('Animal not found');
+    }
+
+    if (animalData.is_adopted) {
+      throw new InternalServerErrorException('Animal is already adopted');
+    }
+
     const { data: newEntry, error } = await this.supabaseService.getClient()
       .from('adoption_requests')
       .insert([
         {
-          ...data, 
-          request_date: new Date(),
+          ...data,
+          request_date: new Date().toISOString(),
         },
       ])
       .select()
@@ -53,7 +68,7 @@ export class AdoptionRequestsService {
       throw new InternalServerErrorException('Failed to create adoption request');
     }
 
-    return newEntry;
+    return newEntry as AdoptionRequests;
   }
 
   async remove(id: string): Promise<{ message: string }> {

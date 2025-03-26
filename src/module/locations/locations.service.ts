@@ -6,44 +6,71 @@ import { Locations } from 'src/common/interfaces/user.interface';
 export class LocationsService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
-  // Отримати всі локації
-  async findAll() {
+  async findAll(): Promise<Locations[]> {
     const { data, error } = await this.supabaseService.getClient()
-      .from('location')
+      .from('locations')
       .select('*');
-    if (error) throw new InternalServerErrorException('Error fetching locations: ' + error.message);
-    return data;
+
+    if (error) {
+      console.error('Error fetching locations:', error.message);
+      throw new InternalServerErrorException('Cannot fetch locations');
+    }
+    return (data as Locations[]) || [];
   }
 
-  // Отримати локацію за ID
-  async findOne(id: string) {
+  async findOne(location_id: string): Promise<Locations> {
     const { data, error } = await this.supabaseService.getClient()
-      .from('location')
+      .from('locations')
       .select('*')
-      .eq('location_id', id)
+      .eq('location_id', location_id)
       .single();
-    if (error) throw new NotFoundException(`Location with ID ${id} not found: ` + error.message);
-    return data;
+
+    if (error || !data) {
+      console.error(`Error fetching location with ID ${location_id}:`, error?.message);
+      throw new NotFoundException(`Location with ID ${location_id} not found`);
+    }
+    return data as Locations;
   }
 
-  // Створити нову локацію
-  async create(data: Locations) {
-    const { data: newEntry, error } = await this.supabaseService.getClient()
-      .from('location')
-      .insert([data])
+  async create(dto: Omit<Locations, 'location_id'>): Promise<Locations> {
+    const { data, error } = await this.supabaseService.getClient()
+      .from('locations')
+      .insert([dto])
       .select()
       .single();
-    if (error) throw new InternalServerErrorException('Error creating location: ' + error.message);
-    return newEntry;
+
+    if (error) {
+      console.error('Error creating location:', error.message);
+      throw new InternalServerErrorException('Failed to create location');
+    }
+    return data as Locations;
   }
 
-  // Видалити локацію
-  async remove(id: string) {
+  async update(location_id: string, dto: Partial<Locations>): Promise<Locations> {
+    const { data, error } = await this.supabaseService.getClient()
+      .from('locations')
+      .update(dto)
+      .eq('location_id', location_id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Error updating location with ID ${location_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to update location with ID ${location_id}`);
+    }
+    return data as Locations;
+  }
+
+  async remove(location_id: string): Promise<{ message: string }> {
     const { error } = await this.supabaseService.getClient()
-      .from('location')
+      .from('locations')
       .delete()
-      .eq('location_id', id);
-    if (error) throw new InternalServerErrorException('Error deleting location: ' + error.message);
-    return { message: 'Deleted successfully' };
+      .eq('location_id', location_id);
+
+    if (error) {
+      console.error(`Error deleting location with ID ${location_id}:`, error.message);
+      throw new InternalServerErrorException(`Failed to delete location with ID ${location_id}`);
+    }
+    return { message: `Location with ID ${location_id} deleted successfully` };
   }
 }
