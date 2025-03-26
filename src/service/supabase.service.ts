@@ -4,13 +4,20 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class SupabaseService {
-  private supabase: SupabaseClient;
+  private readonly supabase: SupabaseClient;
 
-  constructor(private configService: ConfigService) {
-    this.supabase = createClient(
-      this.configService.get<string>('SUPABASE_URL', ''),
-      this.configService.get<string>('SUPABASE_KEY', ''),
-    );
+  constructor(private readonly configService: ConfigService) {
+    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+    const supabaseKey = this.configService.get<string>('SUPABASE_KEY');
+
+    console.log('SUPABASE_URL:', supabaseUrl);
+    console.log('SUPABASE_KEY:', supabaseKey ? '***HIDDEN***' : 'MISSING');
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase credentials are missing. Check your .env file.');
+    }
+
+    this.supabase = createClient(supabaseUrl, supabaseKey);
   }
 
   getClient(): SupabaseClient {
